@@ -174,9 +174,3 @@ StatsFile=stats.txt
 ## Лицензия
 
 Этот проект распространяется под лицензией MIT. Подробности см. в файле LICENSE.
-
-Submit issues or pull requests to improve the script. Ensure changes are compatible with AutoHotkey v2.0+.
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for details.
