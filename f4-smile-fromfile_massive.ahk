@@ -8,15 +8,78 @@ global Paused := false
 global UsedWordsFile := "used_words.txt"
 global WordFile := "words.txt"
 global SettingsFile := "settings.ini"
-global LogFile := IniRead(SettingsFile, "Settings", "LogFile", "log.txt")
+global LogFile := IniRead(SettingsFile, "Settings", "LogFile", "TwitchChatLog.txt")
 global ErrorLogFile := IniRead(SettingsFile, "Settings", "ErrorLogFile", "errors.log")
 global StatsFile := IniRead(SettingsFile, "Settings", "StatsFile", "stats.txt")
+
+; Функция для записи файла с UTF-8 BOM
+WriteFileUTF8BOM(FileName, Content)
+{
+    try
+    {
+        FileObj := FileOpen(FileName, "w", "UTF-8")
+        if (FileObj)
+        {
+            FileObj.Write(Content)
+            FileObj.Close()
+            return true
+        }
+        return false
+    }
+    catch
+    {
+        return false
+    }
+}
+
+; Функция для чтения файла с UTF-8 BOM
+ReadFileUTF8BOM(FileName)
+{
+    try
+    {
+        if !FileExist(FileName)
+            return ""
+        
+        FileObj := FileOpen(FileName, "r", "UTF-8")
+        if (FileObj)
+        {
+            Content := FileObj.Read()
+            FileObj.Close()
+            return Content
+        }
+        return ""
+    }
+    catch
+    {
+        return ""
+    }
+}
+
+; Функция для добавления в файл с UTF-8 BOM
+AppendFileUTF8BOM(FileName, Content)
+{
+    try
+    {
+        ; Читаем существующий контент
+        ExistingContent := ReadFileUTF8BOM(FileName)
+        
+        ; Добавляем новый контент
+        NewContent := ExistingContent . Content
+        
+        ; Записываем обновленный контент
+        return WriteFileUTF8BOM(FileName, NewContent)
+    }
+    catch
+    {
+        return false
+    }
+}
 
 ; Валидация StatsFile
 if (StatsFile = "" || !RegExMatch(StatsFile, "^[\w\-]+\.txt$"))
 {
     FormattedTime := FormatTime(A_NowUTC, "yyyy-MM-dd HH:mm:ss") " UTC"
-    FileAppend "[" FormattedTime "]: Предупреждение: Некорректное имя файла статистики '" StatsFile "', используется по умолчанию: stats.txt`n", ErrorLogFile
+    AppendFileUTF8BOM(ErrorLogFile, "[" FormattedTime "]: Предупреждение: Некорректное имя файла статистики '" StatsFile "', используется по умолчанию: stats.txt`n")
     StatsFile := "stats.txt"
 }
 
@@ -28,7 +91,7 @@ F4::
         if (!IsInteger(LoopCount) || LoopCount < 1)
         {
             FormattedTime := FormatTime(A_NowUTC, "yyyy-MM-dd HH:mm:ss") " UTC"
-            FileAppend "[" FormattedTime "]: Ошибка: Введено некорректное число повторов`n", ErrorLogFile
+            AppendFileUTF8BOM(ErrorLogFile, "[" FormattedTime "]: Ошибка: Введено некорректное число повторов`n")
             MsgBox "Ошибка! Введите целое число больше 0!"
             return
         }
@@ -38,7 +101,7 @@ F4::
         if (Array.Length = 0)
         {
             FormattedTime := FormatTime(A_NowUTC, "yyyy-MM-dd HH:mm:ss") " UTC"
-            FileAppend "[" FormattedTime "]: Ошибка: Не удалось загрузить слова из файла " WordFile "`n", ErrorLogFile
+            AppendFileUTF8BOM(ErrorLogFile, "[" FormattedTime "]: Ошибка: Не удалось загрузить слова из файла " WordFile "`n")
             MsgBox "Ошибка! Не удалось загрузить слова из файла " WordFile
             return
         }
@@ -48,7 +111,7 @@ F4::
     catch as e
     {
         FormattedTime := FormatTime(A_NowUTC, "yyyy-MM-dd HH:mm:ss") " UTC"
-        FileAppend "[" FormattedTime "]: Ошибка в цикле: " e.Message "`n", ErrorLogFile
+        AppendFileUTF8BOM(ErrorLogFile, "[" FormattedTime "]: Ошибка в цикле: " e.Message "`n")
         MsgBox "Ошибка: " e.Message
     }
 }
@@ -60,38 +123,37 @@ F5::  ; Горячая клавиша для восстановления words.
         if !FileExist(UsedWordsFile)
         {
             FormattedTime := FormatTime(A_NowUTC, "yyyy-MM-dd HH:mm:ss") " UTC"
-            FileAppend "[" FormattedTime "]: Ошибка: Файл used_words.txt не существует`n", ErrorLogFile
+            AppendFileUTF8BOM(ErrorLogFile, "[" FormattedTime "]: Ошибка: Файл used_words.txt не существует`n")
             MsgBox "Файл used_words.txt не существует!"
             return
         }
         
         ; Читаем использованные слова
-        UsedWords := FileRead(UsedWordsFile)
+        UsedWords := ReadFileUTF8BOM(UsedWordsFile)
         
         ; Восстанавливаем words.txt, добавляя использованные слова
         if FileExist(WordFile)
         {
-            FileAppend UsedWords, WordFile
+            AppendFileUTF8BOM(WordFile, UsedWords)
         }
         else
         {
-            FileAppend UsedWords, WordFile
+            WriteFileUTF8BOM(WordFile, UsedWords)
         }
         
         ; Очищаем used_words.txt
-        FileDelete UsedWordsFile
-        FileAppend "", UsedWordsFile
+        WriteFileUTF8BOM(UsedWordsFile, "")
         
         ; Логируем действие
         FormattedTime := FormatTime(A_NowUTC, "yyyy-MM-dd HH:mm:ss") " UTC"
-        FileAppend "[" FormattedTime "]: Восстановлен файл " WordFile ", очищен " UsedWordsFile "`n", LogFile
+        AppendFileUTF8BOM(LogFile, "[" FormattedTime "]: Восстановлен файл " WordFile ", очищен " UsedWordsFile "`n")
         
         TrayTip "Файлы обновлены", "words.txt восстановлен, used_words.txt очищен", 1
     }
     catch as e
     {
         FormattedTime := FormatTime(A_NowUTC, "yyyy-MM-dd HH:mm:ss") " UTC"
-        FileAppend "[" FormattedTime "]: Ошибка при восстановлении: " e.Message "`n", ErrorLogFile
+        AppendFileUTF8BOM(ErrorLogFile, "[" FormattedTime "]: Ошибка при восстановлении: " e.Message "`n")
         MsgBox "Ошибка при восстановлении: " e.Message
     }
 }
@@ -119,7 +181,7 @@ main(LoopCount, Array)
     {
         IniWrite 1000, SettingsFile, "Delays", "MinDelay"
         IniWrite 1500, SettingsFile, "Delays", "MaxDelay"
-        IniWrite "log.txt", SettingsFile, "Settings", "LogFile"
+        IniWrite "TwitchChatLog.txt", SettingsFile, "Settings", "LogFile"
         IniWrite "errors.log", SettingsFile, "Settings", "ErrorLogFile"
         IniWrite "stats.txt", SettingsFile, "Settings", "StatsFile"
     }
@@ -137,17 +199,15 @@ main(LoopCount, Array)
         IniWrite MinDelay, SettingsFile, "Delays", "MinDelay"
         IniWrite MaxDelay, SettingsFile, "Delays", "MaxDelay"
         FormattedTime := FormatTime(A_NowUTC, "yyyy-MM-dd HH:mm:ss") " UTC"
-        FileAppend "[" FormattedTime "]: Ошибка: Некорректные значения задержек, использованы значения по умолчанию`n", ErrorLogFile
+        AppendFileUTF8BOM(ErrorLogFile, "[" FormattedTime "]: Ошибка: Некорректные значения задержек, использованы значения по умолчанию`n")
     }
     
-    ; Убираем массив ArrayTime, так как будем использовать прямую рандомизацию
-    ; ArrayTime := [MinDelay, MaxDelay] - эту строку удаляем
     SentCount := 0  ; Счетчик отправленных строк
     StartTime := A_TickCount  ; Замеряем время начала цикла
     
     ; Создаем used_words.txt, если он отсутствует
     if !FileExist(UsedWordsFile)
-        FileAppend "", UsedWordsFile
+        WriteFileUTF8BOM(UsedWordsFile, "")
     
     Loop LoopCount
     {
@@ -155,8 +215,7 @@ main(LoopCount, Array)
         {
             MsgBox "Все слова использованы!"
             ; Создаем пустой words.txt, если он пуст
-            FileDelete WordFile
-            FileAppend "", WordFile
+            WriteFileUTF8BOM(WordFile, "")
             break
         }
         
@@ -174,44 +233,45 @@ main(LoopCount, Array)
         
         ; Логируем отправленное слово
         FormattedTime := FormatTime(A_NowUTC, "yyyy-MM-dd HH:mm:ss") " UTC"
-        FileAppend "[" FormattedTime "]: delay: " ValueTime " ms, send: " Value "`n", LogFile
+        AppendFileUTF8BOM(LogFile, "[" FormattedTime "]: delay: " ValueTime " ms, send: " Value "`n")
         
         ; Увеличиваем счетчик отправленных строк
         SentCount++
         
         ; Записываем использованное слово в used_words.txt
-        FileAppend Value "`n", UsedWordsFile
+        AppendFileUTF8BOM(UsedWordsFile, Value "`n")
         
         ; Удаляем использованное слово из массива
         Array.RemoveAt(rand)
         
         ; Обновляем words.txt, записывая оставшиеся слова
-        FileDelete WordFile
         if (Array.Length > 0)
         {
+            NewContent := ""
             for word in Array
-                FileAppend word "`n", WordFile
+                NewContent .= word "`n"
+            WriteFileUTF8BOM(WordFile, NewContent)
         }
         else
         {
-            FileAppend "", WordFile
+            WriteFileUTF8BOM(WordFile, "")
         }
     }
     
     ; Логируем статистику в log.txt
     TotalTime := Round((A_TickCount - StartTime) / 1000.0, 1)  ; Время в секундах
     FormattedTime := FormatTime(A_NowUTC, "yyyy-MM-dd HH:mm:ss") " UTC"
-    FileAppend "[" FormattedTime "]: Цикл завершен, отправлено " SentCount " строк, общее время " TotalTime " секунд`n", LogFile
+    AppendFileUTF8BOM(LogFile, "[" FormattedTime "]: Цикл завершен, отправлено " SentCount " строк, общее время " TotalTime " секунд`n")
     
     ; Логируем статистику в stats.txt с обработкой ошибок
     try
     {
-        FileAppend "[" FormattedTime "]: Отправлено " SentCount " строк, общее время " TotalTime " секунд`n", StatsFile
+        AppendFileUTF8BOM(StatsFile, "[" FormattedTime "]: Отправлено " SentCount " строк, общее время " TotalTime " секунд`n")
     }
     catch as e
     {
         FormattedTime := FormatTime(A_NowUTC, "yyyy-MM-dd HH:mm:ss") " UTC"
-        FileAppend "[" FormattedTime "]: Ошибка записи в файл статистики " StatsFile ": " e.Message "`n", ErrorLogFile
+        AppendFileUTF8BOM(ErrorLogFile, "[" FormattedTime "]: Ошибка записи в файл статистики " StatsFile ": " e.Message "`n")
     }
     
     MsgBox "Цикл завершен! Отправлено " SentCount " строк.`nЛог сохранен в " LogFile
@@ -223,7 +283,8 @@ LoadArrayFromFile(FileName)
     if !FileExist(FileName)
         return arr
         
-    for line in StrSplit(FileRead(FileName), "`n", "`r")
+    Content := ReadFileUTF8BOM(FileName)
+    for line in StrSplit(Content, "`n", "`r")
     {
         line := Trim(line)
         if (line != "")
